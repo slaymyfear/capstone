@@ -1,0 +1,849 @@
+{% extends "base.html" %}
+
+{% block title %}Strategic Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Filters -->
+    <div class="row mb-2">
+        <div class="col-auto">
+            <div class="card shadow-sm" style="width: fit-content;">
+                <div class="card-body p-2">
+                    <div class="d-flex gap-3 align-items-start">
+                        <div>
+                            <label for="artistFilter" class="form-label small mb-1">Artist</label>
+                            <select class="form-select form-select-sm" id="artistFilter" multiple style="width: 140px; height: 70px; font-size: 11px;">
+                                <option value="2Pac">2Pac</option>
+                                <option value="Kendrick Lamar">Kendrick Lamar</option>
+                                <option value="J. Cole">J. Cole</option>
+                                <option value="Nas">Nas</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="yearRange" class="form-label small mb-1">Year Range</label>
+                            <select class="form-select form-select-sm" id="yearRange" style="width: 140px; font-size: 11px;">
+                                <option value="all">All Years</option>
+                                <option value="last5">Last 5 Years</option>
+                                <option value="last10">Last 10 Years</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Popularity Trends -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h3>Popularity Trends Over Time</h3>
+                    <canvas id="popularityTrendsChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Best Producers and Featured Artists -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h3>Top Producers</h3>
+                    <canvas id="producersChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h3>Featured Artists Impact</h3>
+                    <canvas id="featuredArtistsChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Themes Impact -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h3>Themes and Their Impact</h3>
+                    <canvas id="themesImpactChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize charts
+    let popularityTrendsChart, producersChart, featuredArtistsChart, themesImpactChart;
+    
+    // Select all artists by default
+    const artistSelect = document.getElementById('artistFilter');
+    Array.from(artistSelect.options).forEach(option => option.selected = true);
+    
+    // Fetch and render all charts
+    fetchData();
+
+    // Add event listeners for filters
+    document.getElementById('artistFilter').addEventListener('change', fetchData);
+    document.getElementById('yearRange').addEventListener('change', fetchData);
+
+    function fetchData() {
+        const selectedArtists = Array.from(document.getElementById('artistFilter').selectedOptions).map(option => option.value);
+        const yearRange = document.getElementById('yearRange').value;
+
+        // Fetch popularity trends data
+        fetch(`/api/popularity-trends?artists=${selectedArtists.join(',')}&yearRange=${yearRange}`)
+            .then(response => response.json())
+            .then(data => renderPopularityTrendsChart(data));
+
+        // Fetch producers data
+        fetch(`/api/top-producers?artists=${selectedArtists.join(',')}&yearRange=${yearRange}`)
+            .then(response => response.json())
+            .then(data => renderProducersChart(data));
+
+        // Fetch featured artists data
+        fetch(`/api/featured-artists?artists=${selectedArtists.join(',')}&yearRange=${yearRange}`)
+            .then(response => response.json())
+            .then(data => renderFeaturedArtistsChart(data));
+
+        // Fetch themes impact data
+        fetch(`/api/themes-impact?artists=${selectedArtists.join(',')}&yearRange=${yearRange}`)
+            .then(response => response.json())
+            .then(data => renderThemesImpactChart(data));
+    }
+
+    function getArtistColor(artistName, alpha = 1) {
+        const colors = {
+            '2Pac': {
+                border: '#FF0000',  // Bright Red
+                fill: 'rgba(255, 0, 0, ' + alpha + ')'  // Bright Red with alpha
+            },
+            'Nas': {
+                border: '#D2691E',  // Bright Brown (Chocolate)
+                fill: 'rgba(210, 105, 30, ' + alpha + ')'  // Bright Brown with alpha
+            },
+            'Kendrick Lamar': {
+                border: '#1E90FF',  // Bright Blue (Dodger Blue)
+                fill: 'rgba(30, 144, 255, ' + alpha + ')'  // Bright Blue with alpha
+            },
+            'J. Cole': {
+                border: '#363636',  // Charcoal Black
+                fill: 'rgba(54, 54, 54, ' + alpha + ')'  // Charcoal Black with alpha
+            }
+        };
+        return colors[artistName] || {
+            border: getRandomColor(),
+            fill: getRandomColor(alpha)
+        };
+    }
+
+    function renderPopularityTrendsChart(data) {
+        const ctx = document.getElementById('popularityTrendsChart').getContext('2d');
+        
+        if (popularityTrendsChart) {
+            popularityTrendsChart.destroy();
+        }
+
+        // Set a fixed height for the chart container
+        ctx.canvas.parentNode.style.height = '600px';
+
+        popularityTrendsChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: data.artists.map(artist => {
+                    const color = getArtistColor(artist.name, 0.3);
+                    return {
+                        label: artist.name,
+                        data: artist.popularity_data.map(point => ({
+                            x: point.x,
+                            y: point.y,
+                            songTitle: point.title
+                        })),
+                        borderColor: color.border,
+                        backgroundColor: color.fill,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 8,  // Increased point size
+                        pointHoverRadius: 12,  // Increased hover size
+                        borderWidth: 3,
+                        pointBackgroundColor: color.border,
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2
+                    };
+                })
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    intersect: false,
+                    mode: 'nearest'
+                },
+                scales: {
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Spotify Popularity',
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            }
+                        },
+                        min: 0,
+                        max: 100,
+                        ticks: {
+                            stepSize: 10,
+                            font: {
+                                size: 14
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)',
+                            drawTicks: true
+                        }
+                    },
+                    x: {
+                        type: 'linear',
+                        title: {
+                            display: true,
+                            text: 'Release Year',
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            }
+                        },
+                        min: 1990,
+                        max: 2025,
+                        ticks: {
+                            stepSize: 5,  // Show every 5 years
+                            font: {
+                                size: 14
+                            },
+                            callback: function(value) {
+                                // Only show specific years
+                                if (value === 1990 || value === 1995 || value % 5 === 0) {
+                                    return value;
+                                }
+                                return '';
+                            }
+                        },
+                        grid: {
+                            display: true,
+                            color: 'rgba(0, 0, 0, 0.1)',
+                            drawTicks: true
+                        }
+                    }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Evolution of Hip-Hop Artists\' Popularity (1990-2025)',
+                        font: {
+                            size: 24,
+                            weight: 'bold'
+                        },
+                        padding: 30
+                    },
+                    legend: {
+                        position: 'top',
+                        align: 'center',
+                        labels: {
+                            padding: 20,
+                            font: {
+                                size: 14
+                            },
+                            usePointStyle: true,
+                            pointStyle: 'circle'
+                        }
+                    },
+                    tooltip: {
+                        enabled: true,
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleFont: {
+                            size: 16,
+                            weight: 'bold'
+                        },
+                        bodyFont: {
+                            size: 14
+                        },
+                        padding: 12,
+                        callbacks: {
+                            title: function(context) {
+                                return context[0].dataset.label;
+                            },
+                            label: function(context) {
+                                const dataPoint = context.raw;
+                                return [
+                                    `Song: ${dataPoint.songTitle}`,
+                                    `Year: ${dataPoint.x}`,
+                                    `Popularity: ${dataPoint.y}`
+                                ];
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    function renderProducersChart(data) {
+        const ctx = document.getElementById('producersChart').getContext('2d');
+        
+        if (producersChart) {
+            producersChart.destroy();
+        }
+
+        // Set a fixed height for the chart container
+        ctx.canvas.parentNode.style.height = '600px';
+
+        // Filter and sort the data
+        const validData = data
+            .filter(item => item._id && item.avgPopularity != null)
+            .sort((a, b) => b.avgPopularity - a.avgPopularity);
+
+        // Create colors for each bar
+        const barColors = validData.map((_, index) => {
+            const baseColors = [
+                'rgba(255, 99, 132, 0.8)',   // Red
+                'rgba(54, 162, 235, 0.8)',   // Blue
+                'rgba(255, 206, 86, 0.8)',   // Yellow
+                'rgba(75, 192, 192, 0.8)',   // Teal
+                'rgba(153, 102, 255, 0.8)',  // Purple
+                'rgba(255, 159, 64, 0.8)',   // Orange
+                'rgba(199, 199, 199, 0.8)',  // Gray
+                'rgba(83, 102, 255, 0.8)'    // Blue-Purple
+            ];
+            return baseColors[index % baseColors.length];
+        });
+
+        producersChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: validData.map(item => item._id),
+                datasets: [{
+                    label: 'Average Song Popularity',
+                    data: validData.map(item => item.avgPopularity),
+                    backgroundColor: barColors,
+                    borderColor: barColors.map(color => color.replace('0.8', '1')),
+                    borderWidth: 2,
+                    barThickness: 40
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        }
+                    },
+                    x: {
+                        beginAtZero: true,
+                        max: 100,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        },
+                        ticks: {
+                            stepSize: 10,
+                            font: {
+                                size: 12
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Average Spotify Popularity Score',
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Best Hip-Hop Producers by Song Popularity',
+                        font: {
+                            size: 20,
+                            weight: 'bold'
+                        },
+                        padding: 20
+                    },
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleFont: {
+                            size: 14,
+                            weight: 'bold'
+                        },
+                        bodyFont: {
+                            size: 12
+                        },
+                        callbacks: {
+                            title: function(context) {
+                                return context[0].label;
+                            },
+                            label: function(context) {
+                                const item = validData[context.dataIndex];
+                                const topSongs = item.songs
+                                    .sort((a, b) => b.popularity - a.popularity)
+                                    .slice(0, 2)
+                                    .map(song => `${song.title} (${song.artist}) - ${song.popularity}`);
+                                
+                                return [
+                                    `Average Popularity: ${item.avgPopularity.toFixed(1)}`,
+                                    `Total Songs: ${item.songCount}`,
+                                    'Top Songs:',
+                                    ...topSongs
+                                ];
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    function renderFeaturedArtistsChart(data) {
+        const ctx = document.getElementById('featuredArtistsChart').getContext('2d');
+        
+        if (featuredArtistsChart) {
+            featuredArtistsChart.destroy();
+        }
+
+        // Set a fixed height for the chart container
+        ctx.canvas.parentNode.style.height = '600px';
+
+        // Filter out any null or undefined values and "---" entries
+        const validData = data.filter(item => 
+            item._id && 
+            item.avgPopularity != null && 
+            item.collaborationCount != null &&
+            item._id !== '---'
+        );
+
+        // Sort by number of collaborations
+        validData.sort((a, b) => b.collaborationCount - a.collaborationCount);
+
+        featuredArtistsChart = new Chart(ctx, {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    label: 'Featured Artists',
+                    data: validData.map(item => ({
+                        x: item.collaborationCount,
+                        y: item.avgPopularity,
+                        artistName: item._id,
+                        songs: item.songs
+                    })),
+                    backgroundColor: 'rgba(30, 144, 255, 0.7)',
+                    pointRadius: 10,
+                    pointHoverRadius: 15,
+                    pointStyle: 'circle'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        min: 0,
+                        max: 100,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        },
+                        ticks: {
+                            stepSize: 10,
+                            font: {
+                                size: 14
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Average Spotify Popularity',
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            }
+                        }
+                    },
+                    x: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        },
+                        ticks: {
+                            stepSize: 1,
+                            font: {
+                                size: 14
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Number of Collaborations',
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Featured Artists Impact on Songs',
+                        font: {
+                            size: 24,
+                            weight: 'bold'
+                        },
+                        padding: 20
+                    },
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleFont: {
+                            size: 16
+                        },
+                        bodyFont: {
+                            size: 14
+                        },
+                        callbacks: {
+                            title: function(context) {
+                                return context.raw.artistName;
+                            },
+                            label: function(context) {
+                                const item = validData[context.dataIndex];
+                                return [
+                                    `Popularity: ${item.avgPopularity.toFixed(1)}`,
+                                    `Collaborations: ${item.collaborationCount}`,
+                                    `Songs: ${item.songs.slice(0, 2).join(', ')}${item.songs.length > 2 ? '...' : ''}`
+                                ];
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    function renderThemesImpactChart(data) {
+        const ctx = document.getElementById('themesImpactChart').getContext('2d');
+        
+        if (themesImpactChart) {
+            themesImpactChart.destroy();
+        }
+
+        // Set a fixed height for the chart container
+        ctx.canvas.parentNode.style.height = '600px';
+
+        // Filter and sort the data
+        const validData = data
+            .filter(item => item.theme && item.avgPopularity != null && item.songCount != null)
+            .sort((a, b) => b.songCount - a.songCount);
+
+        // Calculate trend line data
+        const points = validData.map(item => ({x: item.songCount, y: item.avgPopularity}));
+        const trendline = calculateTrendLine(points);
+
+        // Create datasets for each theme
+        const datasets = [];
+
+        // Add trend line dataset
+        datasets.push({
+            type: 'line',
+            label: 'Trend',
+            data: [
+                { x: Math.min(...points.map(p => p.x)), y: trendline.slope * Math.min(...points.map(p => p.x)) + trendline.intercept },
+                { x: Math.max(...points.map(p => p.x)), y: trendline.slope * Math.max(...points.map(p => p.x)) + trendline.intercept }
+            ],
+            borderColor: 'rgba(0, 0, 0, 0.3)',
+            borderWidth: 2,
+            borderDash: [5, 5],
+            fill: false,
+            pointRadius: 0
+        });
+
+        // Add theme bubbles
+        validData.forEach((item, index) => {
+            // Create datasets for each theme
+            const baseColors = [
+                { color: 'hsla(51, 100%, 50%, 0.7)', name: 'Luxury & Lifestyle' },     // Gold (unchanged)
+                { color: 'hsla(348, 83%, 47%, 0.7)', name: 'Love & Relationships' },   // Crimson Red
+                { color: 'hsla(195, 98%, 41%, 0.7)', name: 'Social Issues' },         // Deep Ocean Blue
+                { color: 'hsla(78, 92%, 40%, 0.7)', name: 'Personal Growth' },        // Lime Green
+                { color: 'hsla(292, 84%, 45%, 0.7)', name: 'Street Life' },           // Rich Purple
+                { color: 'hsla(25, 95%, 53%, 0.7)', name: 'Success & Ambition' },     // Burnt Orange
+                { color: 'hsla(180, 98%, 28%, 0.7)', name: 'Family & Heritage' },     // Deep Teal
+                { color: 'hsla(315, 90%, 45%, 0.7)', name: 'Spirituality' },          // Magenta
+                { color: 'hsla(165, 95%, 35%, 0.7)', name: 'Politics & Power' },      // Emerald
+                { color: 'hsla(38, 92%, 50%, 0.7)', name: 'Art & Creativity' }        // Amber
+            ];
+
+            // Find the correct color based on theme name
+            let colorInfo;
+            if (item.theme.toLowerCase().includes('luxury') || item.theme.toLowerCase().includes('lifestyle')) {
+                colorInfo = baseColors[0];  // Use gold for Luxury/Lifestyle
+            } else {
+                // Use other colors for remaining themes, skipping the gold option
+                const colorIndex = (index % (baseColors.length - 1)) + 1;
+                colorInfo = baseColors[colorIndex];
+            }
+
+            // Calculate bubble size directly proportional to song count
+            const minSize = 8;
+            const maxSize = 35;
+            const bubbleSize = minSize + (maxSize - minSize) * (item.songCount / Math.max(...validData.map(d => d.songCount)));
+
+            datasets.push({
+                type: 'bubble',
+                label: item.theme,
+                data: [{
+                    x: item.songCount,
+                    y: item.avgPopularity,
+                    r: bubbleSize,
+                    theme: item.theme,
+                    songs: item.songs,
+                    stdDev: calculateStdDev(item.songs.map(s => s.popularity))
+                }],
+                backgroundColor: colorInfo.color,
+                borderColor: colorInfo.color.replace('0.7', '0.9'),
+                borderWidth: 1.5
+            });
+        });
+
+        themesImpactChart = new Chart(ctx, {
+            type: 'bubble',
+            data: {
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                layout: {
+                    padding: {
+                        top: 30,
+                        right: 120,
+                        bottom: 30,
+                        left: 30
+                    }
+                },
+                scales: {
+                    y: {
+                        min: 0,
+                        max: 100,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)',
+                            drawBorder: true,
+                            lineWidth: 1
+                        },
+                        ticks: {
+                            stepSize: 10,
+                            font: {
+                                size: 12
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Average Spotify Popularity',
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            },
+                            padding: 10
+                        }
+                    },
+                    x: {
+                        min: 0,
+                        max: 250,  // Fixed maximum
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)',
+                            drawBorder: true,
+                            lineWidth: 1
+                        },
+                        ticks: {
+                            stepSize: 10,  // Fixed interval of 10
+                            font: {
+                                size: 12
+                            },
+                            callback: function(value) {
+                                return value.toFixed(0);
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Number of Songs',
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            },
+                            padding: 10
+                        }
+                    }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Theme Impact on Song Popularity',
+                        font: {
+                            size: 20,
+                            weight: 'bold'
+                        },
+                        padding: {
+                            top: 10,
+                            bottom: 30
+                        }
+                    },
+                    legend: {
+                        display: true,
+                        position: 'right',
+                        align: 'start',
+                        labels: {
+                            usePointStyle: true,
+                            pointStyle: 'circle',
+                            padding: 15,
+                            font: {
+                                size: 11
+                            },
+                            generateLabels: function(chart) {
+                                return chart.data.datasets.slice(1).map((dataset, index) => ({
+                                    text: `${dataset.label} (${dataset.data[0].x} songs)`,
+                                    fillStyle: dataset.backgroundColor,
+                                    strokeStyle: dataset.borderColor,
+                                    lineWidth: 1,
+                                    hidden: false,
+                                    index: index
+                                }));
+                            }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleFont: {
+                            size: 14,
+                            weight: 'bold'
+                        },
+                        bodyFont: {
+                            size: 12
+                        },
+                        callbacks: {
+                            title: function(context) {
+                                if (context[0].dataset.type === 'line') return 'Trend Line';
+                                return context[0].raw.theme;
+                            },
+                            label: function(context) {
+                                if (context.dataset.type === 'line') {
+                                    return `Popularity: ${context.raw.y.toFixed(1)}`;
+                                }
+                                const item = context.raw;
+                                const topSongs = item.songs.map(song => 
+                                    `${song.title} (${song.artist}) - ${song.popularity}`
+                                );
+                                return [
+                                    `Average Popularity: ${item.y.toFixed(1)}`,
+                                    `Number of Songs: ${item.x}`,
+                                    `Popularity Std Dev: ${item.stdDev.toFixed(1)}`,
+                                    'Top Songs:',
+                                    ...topSongs
+                                ];
+                            }
+                        }
+                    }
+                },
+                plugins: [{
+                    id: 'bubbleLabels',
+                    afterDatasetsDraw(chart, args, options) {
+                        const ctx = chart.ctx;
+                        chart.data.datasets.slice(1).forEach((dataset) => {
+                            dataset.data.forEach((datapoint) => {
+                                const x = chart.scales.x.getPixelForValue(datapoint.x);
+                                const y = chart.scales.y.getPixelForValue(datapoint.y);
+                                
+                                // Draw theme name with adjusted position
+                                ctx.save();
+                                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                                ctx.font = '10px Arial';  // Slightly larger font
+                                ctx.textAlign = 'center';
+                                ctx.fillText(dataset.label, x, y - datapoint.r - 3);  // Adjusted spacing
+                                
+                                // Add song count below the bubble
+                                ctx.font = '9px Arial';  // Slightly larger font
+                                ctx.fillText(`(${datapoint.x})`, x, y + datapoint.r + 10);  // Adjusted spacing
+                                ctx.restore();
+                            });
+                        });
+                    }
+                }]
+            }
+        });
+    }
+
+    // Helper function to calculate trend line
+    function calculateTrendLine(points) {
+        const n = points.length;
+        let sumX = 0;
+        let sumY = 0;
+        let sumXY = 0;
+        let sumXX = 0;
+        
+        points.forEach(point => {
+            sumX += point.x;
+            sumY += point.y;
+            sumXY += point.x * point.y;
+            sumXX += point.x * point.x;
+        });
+        
+        const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+        const intercept = (sumY - slope * sumX) / n;
+        
+        return { slope, intercept };
+    }
+
+    // Helper function to calculate standard deviation
+    function calculateStdDev(values) {
+        const n = values.length;
+        const mean = values.reduce((a, b) => a + b) / n;
+        const variance = values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / n;
+        return Math.sqrt(variance);
+    }
+
+    function getRandomColor(alpha = 1) {
+        const letters = '0123456789ABCDEF';
+        let color = '#';
+        for (let i = 0; i < 6; i++) {
+            color += letters[Math.floor(Math.random() * 16)];
+        }
+        return alpha < 1 ? color + Math.round(alpha * 255).toString(16) : color;
+    }
+
+    // Make charts responsive with larger size
+    const chartContainers = document.querySelectorAll('.card-body');
+    chartContainers.forEach(container => {
+        container.style.height = '600px';  // Increased height from 400px to 600px
+        container.style.padding = '30px';  // Increased padding for better spacing
+    });
+});
+</script>
+{% endblock %} 
