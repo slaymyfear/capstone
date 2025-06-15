@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Operational Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.0.0/dist/chartjs-plugin-annotation.min.js"></script>
+    <!-- vis-network for timeline/network graph -->
+    <script type="text/javascript" src="https://unpkg.com/vis-timeline@latest/dist/vis-timeline-graph2d.min.js"></script>
+    <script>// console.log('vis object loaded:', typeof vis !== 'undefined');</script>
+    <link href="https://unpkg.com/vis-timeline@latest/dist/vis-timeline-graph2d.min.css" rel="stylesheet" />
+    <!-- Plotly.js for Sunburst Chart -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f8f9fa; margin: 0; padding: 0; }
+        .container { max-width: 1200px; margin: 1.5rem auto; padding: 1.5rem; background: #fff; border-radius: 10px; box-shadow: 0 2px 10px rgba(34,34,59,0.05); }
+        h1 { text-align: center; margin-bottom: 1.5rem; font-size: 2.2rem; color: #333; }
+        .dashboard-section { margin-bottom: 2.5rem; border-bottom: 1px solid #eee; padding-bottom: 1.5rem; }
+        .dashboard-section:last-child { border-bottom: none; }
+        .section-title { font-size: 1.8rem; margin-bottom: 0.8rem; color: #2c3e50; font-weight: 600; }
+        .section-purpose { font-size: 0.95rem; color: #7f8c8d; margin-bottom: 1rem; }
+        .chart-wrapper, .table-wrapper, .timeline-wrapper, .alerts-wrapper { 
+            width: 100%; 
+            background: #fdfdfd; 
+            border-radius: 8px; 
+            padding: 1.2rem; 
+            box-shadow: 0 2px 10px rgba(34,34,59,0.05);
+            margin-bottom: 1rem;
+        }
+
+        /* Table Styling */
+        .leaderboard-table, .heatmap-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+        .leaderboard-table th, .leaderboard-table td, 
+        .heatmap-table th, .heatmap-table td {
+            border: 1px solid #e0e0e0;
+            padding: 10px;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+        .leaderboard-table th, .heatmap-table th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+            color: #333;
+            cursor: pointer;
+        }
+        .leaderboard-table tbody tr:nth-child(even) { background-color: #f9f9f9; }
+        .leaderboard-table tbody tr:hover { background-color: #f0f0f0; }
+        
+        /* Color gradient for popularity rank */
+        .rank-red { background-color: #ffcccc; }
+        .rank-yellow { background-color: #ffebcc; }
+        .rank-green { background-color: #ccffcc; }
+
+        /* Alerts Panel Styling */
+        .alert-item {
+            padding: 10px 15px;
+            margin-bottom: 8px;
+            border-radius: 5px;
+            font-size: 0.95rem;
+        }
+        .alert-warning { background-color: #fff3cd; border: 1px solid #ffeeba; color: #856404; }
+        .alert-info { background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; }
+
+        /* Timeline Styling */
+        #timeline { width: 100%; height: 300px; border: 1px solid #e0e0e0; border-radius: 8px; }
+        #artistActivityTimeline { width: 100%; height: 400px; border: 1px solid #e0e0e0; border-radius: 8px; }
+
+        /* Emotion colors for timeline */
+        .emotion-angry { background-color: #f8d7da; border-color: #dc3545; }
+        .emotion-sad { background-color: #cfe2f3; border-color: #007bff; }
+        .emotion-happy { background-color: #d4edda; border-color: #28a745; }
+        .emotion-calm { background-color: #fff3cd; border-color: #ffc107; }
+        .emotion-energetic { background-color: #d1ecf1; border-color: #17a2b8; }
+        .emotion-relaxed { background-color: #e2e3e5; border-color: #6c757d; }
+        
+        /* Vis.js specific adjustments */
+        .vis-item.vis-range {
+            border-radius: 5px;
+            text-align: center;
+            font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #333;
+            padding: 0 5px;
+        }
+        .vis-item .vis-item-content {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        /* Specific styling for box items on the Artist Activity Timeline */
+        .vis-item.vis-box {
+            border-radius: 5px; /* Slightly rounded corners */
+            padding: 5px 8px; /* Internal padding for content */
+            text-align: center;
+            font-size: 0.85em; /* Slightly smaller font for more items to fit */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 1px 1px 3px rgba(0,0,0,0.2); /* Subtle shadow for depth */
+            border-width: 2px; /* Thicker border for more emphasis */
+            color: #333; /* Default text color for contrast */
+        }
+        .timeline-high-potential {
+            background-color: #d4edda;
+            border-color: #28a745;
+        }
+        .vis-item {
+            background-color: #e2e3e5;
+            border-color: #6c757d;
+        }
+
+        /* Artist specific colors */
+        .artist-color-0 { background-color: #AEC6CF; border-color: #6D93A0; color: #333; }
+        .artist-color-1 { background-color: #FFB347; border-color: #E69D00; color: #333; }
+        .artist-color-2 { background-color: #77DD77; border-color: #5AA05A; color: #333; }
+        .artist-color-3 { background-color: #B39EB5; border-color: #8D7A91; color: #333; }
+        .artist-color-4 { background-color: #FF6961; border-color: #CC4C4C; color: #333; }
+        .artist-color-5 { background-color: #FDFD96; border-color: #E4E470; color: #333; }
+        .artist-color-6 { background-color: #84B6F4; border-color: #618FD8; color: #333; }
+        .artist-color-7 { background-color: #FCB9AA; border-color: #E29B8B; color: #333; }
+        .artist-color-8 { background-color: #BFFCC6; border-color: #9BD6A2; color: #333; }
+        .artist-color-9 { background-color: #FFDAC1; border-color: #E6B69E; color: #333; }
+        /* Add more colors if you expect more than 10 unique artists */
+
+        @media (max-width: 768px) {
+            .container { margin: 1rem auto; padding: 1rem; }
+            .chart-wrapper, .table-wrapper, .timeline-wrapper, .alerts-wrapper { padding: 0.8rem; }
+            h1 { font-size: 1.8rem; }
+            .section-title { font-size: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Operational Dashboard</h1>
+
+        <div style="text-align: center; margin-bottom: 20px;">
+            <a href="/" style="margin: 0 10px; text-decoration: none; color: #6c757d;">Home</a>
+            <a href="/dashboard" style="margin: 0 10px; text-decoration: none; color: #6c757d;">Strategic Dashboard</a>
+            <a href="/operational_dashboard" style="margin: 0 10px; text-decoration: none; color: #007bff; font-weight: bold;">Operational Dashboard</a>
+            <a href="/analytics_dashboard" style="margin: 0 10px; text-decoration: none; color: #6c757d;">Analytical Dashboard</a>
+        </div>
+
+        <!-- Top/Bottom Performers -->
+        <div class="dashboard-section">
+            <div class="section-title">1. Top/Bottom Performers (Leaderboard Table)</div>
+            <div class="section-purpose">Monitor top-performing songs, emotion trends, and upcoming releases.</div>
+            <div class="table-wrapper">
+                <table id="topPerformersTable" class="leaderboard-table">
+                    <thead>
+                        <tr>
+                            <th>Song Title | Artist</th>
+                            <th id="popularityRankHeader">Spotify Popularity Rank ▲▼</th>
+                            <th>Dominant Emotion</th>
+                            <th>Release Year</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Data will be loaded here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Artist Activity Timeline (Gantt Style) -->
+        <div class="dashboard-section">
+            <div class="section-title">2. Artist Activity Timeline (Gantt Style)</div>
+            <div class="section-purpose">Visualize artist activity over time, highlighting release cycles and performance trends.</div>
+            <div class="timeline-wrapper">
+                <label for="artistFilter" style="margin-bottom: 10px; display: block; font-weight: bold;">Filter by Artist:</label>
+                <select id="artistFilter" style="padding: 8px; border-radius: 5px; border: 1px solid #ccc; margin-bottom: 15px; width: 250px;">
+                    <option value="all">All Artists</option>
+                    <!-- Artist options will be populated by JavaScript -->
+                </select>
+                <p style="font-size: 0.9em; color: #7f8c8d; margin-top: -10px; margin-bottom: 15px;">💡 Drag the timeline horizontally to explore activity over different years.</p>
+                <div id="artistActivityTimeline"></div>
+            </div>
+        </div>
+
+        <!-- Emotion Distribution -->
+        <div class="dashboard-section">
+            <div class="section-title">3. Emotion Distribution (Donut Chart)</div>
+            <div class="section-purpose">% of songs per Dominant_Emotion.</div>
+            <div class="chart-wrapper">
+                <canvas id="emotionDistributionChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Upcoming Releases Pipeline -->
+        <div class="dashboard-section">
+            <div class="section-title">4. Artist -> Album -> Emotion (Treemap Chart)</div>
+            <div class="section-purpose">Analyze how an artist's emotional themes vary per album.</div>
+            <div class="timeline-wrapper">
+                <div style="margin-bottom: 15px;">
+                    <label for="treemapArtistFilter" style="font-weight: bold; margin-right: 10px;">Filter by Artist:</label>
+                    <select id="treemapArtistFilter" style="padding: 8px; border-radius: 5px; border: 1px solid #ccc; width: 200px;">
+                        <option value="all">All Artists</option>
+                        <!-- Artist options will be populated by JavaScript -->
+                    </select>
+                </div>
+                <div id="treemapLegend" style="margin-bottom: 20px; padding: 10px; border: 1px solid #eee; border-radius: 8px; background-color: #f9f9f9;">
+                    <span style="font-weight: bold; margin-right: 10px;">Color Key:</span>
+                    <div style="display: inline-block; margin-right: 15px;">
+                        <span style="background-color: #F5F5F5; display: inline-block; width: 15px; height: 15px; border: 1px solid #ccc; vertical-align: middle; margin-right: 5px;"></span>Root (All Artists)
+                    </div>
+                    <div style="display: inline-block; margin-right: 15px;">
+                        <span style="background-color: #1A73E8; display: inline-block; width: 15px; height: 15px; border: 1px solid #ccc; vertical-align: middle; margin-right: 5px;"></span>Artist
+                    </div>
+                    <div style="display: inline-block; margin-right: 15px;">
+                        <span style="background-color: #BBDEFB; display: inline-block; width: 15px; height: 15px; border: 1px solid #ccc; vertical-align: middle; margin-right: 5px;"></span>Album
+                    </div>
+                    <span style="font-weight: bold; margin-right: 10px; margin-left: 10px;">Emotion Colors:</span>
+                    <span id="emotionColorLegend"></span>
+                </div>
+                <div id="artistAlbumEmotionChart" style="height: 500px;"></div>
+            </div>
+        </div>
+
+        <!-- Urgent Alerts Panel -->
+        <div class="dashboard-section">
+            <div class="section-title">5. Urgent Alerts Panel</div>
+            <div class="section-purpose">Receive immediate notifications on critical song performance changes and high-potential releases.</div>
+            <div class="alerts-wrapper">
+                <div id="alertsContainer">
+                    <!-- Alerts will be loaded here by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Helper function for color coding popularity rank with a gradient
+        function getRankColor(rank) {
+            // Normalize rank to a 0-1 scale
+            const normalizedRank = rank / 100;
+
+            // Define start and end colors (e.g., a reddish hue for low, greenish for high)
+            const startColor = { r: 255, g: 100, b: 100 }; // More red for low rank
+            const endColor = { r: 100, g: 255, b: 100 };   // More green for high rank
+
+            // Interpolate between colors
+            const r = Math.round(startColor.r + (endColor.r - startColor.r) * normalizedRank);
+            const g = Math.round(startColor.g + (endColor.g - startColor.g) * normalizedRank);
+            const b = Math.round(startColor.b + (endColor.b - startColor.b) * normalizedRank);
+
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+
+        // Helper for emotion emojis
+        function getEmotionEmoji(emotion) {
+            switch (emotion.toLowerCase()) {
+                case 'angry': return '😡';
+                case 'sad': return '😢';
+                case 'happy': return '😊';
+                case 'calm': return '😌';
+                case 'energetic': return '⚡';
+                case 'relaxed': return '🧘';
+                default: return '';
+            }
+        }
+
+        // Helper for emotion colors
+        function getEmotionClass(emotion) {
+            switch (emotion.toLowerCase()) {
+                case 'angry': return 'emotion-angry';
+                case 'sad': return 'emotion-sad';
+                case 'happy': return 'emotion-happy';
+                case 'calm': return 'emotion-calm';
+                case 'energetic': return 'emotion-energetic';
+                case 'relaxed': return 'emotion-relaxed';
+                default: return '';
+            }
+        }
+
+        // 1. Top/Bottom Performers
+        fetch('/api/operational/top-performers')
+            .then(res => res.json())
+            .then(data => {
+                const tbody = document.querySelector('#topPerformersTable tbody');
+                tbody.innerHTML = ''; // Clear existing rows
+
+                data.forEach(song => {
+                    const row = tbody.insertRow();
+                    row.insertCell().textContent = `${song.Song_Title} | ${song.Artist_Name}`;
+                    const rankCell = row.insertCell();
+                    rankCell.textContent = song.Spotify_Popularity_Rank; 
+                    rankCell.style.backgroundColor = getRankColor(song.Spotify_Popularity_Rank); // Apply gradient color
+                    const emotionCell = row.insertCell();
+                    emotionCell.innerHTML = `${getEmotionEmoji(song.Dominant_Emotion)} ${song.Dominant_Emotion}`;
+                    const yearCell = row.insertCell();
+                    yearCell.textContent = song.Release_Year;
+                    if (song.Release_Year >= 2024) {
+                        yearCell.style.fontWeight = 'bold';
+                    }
+                });
+
+                // Add sorting functionality
+                document.getElementById('popularityRankHeader').addEventListener('click', () => {
+                    const sortedData = [...data].sort((a, b) => a.Spotify_Popularity_Rank - b.Spotify_Popularity_Rank);
+                    tbody.innerHTML = ''; // Clear and re-render
+                    sortedData.forEach(song => {
+                         const row = tbody.insertRow();
+                         row.insertCell().textContent = `${song.Song_Title} | ${song.Artist_Name}`;
+                         const rankCell = row.insertCell();
+                         rankCell.textContent = song.Spotify_Popularity_Rank; 
+                         rankCell.style.backgroundColor = getRankColor(song.Spotify_Popularity_Rank); // Apply gradient color
+
+                         const emotionCell = row.insertCell();
+                         emotionCell.innerHTML = `${getEmotionEmoji(song.Dominant_Emotion)} ${song.Dominant_Emotion}`;
+
+                         const yearCell = row.insertCell();
+                         yearCell.textContent = song.Release_Year;
+                         if (song.Release_Year >= 2024) {
+                             yearCell.style.fontWeight = 'bold';
+                         }
+                    });
+                });
+            })
+            .catch(error => console.error("Error loading top performers:", error));
+
+        let allArtistActivityData = []; // To store all fetched data
+        let currentArtistTimeline = null; // To store the existing timeline instance
+        const artistColors = {}; // To store assigned colors for artists
+        const colorPalette = [
+            '#AEC6CF', '#FFB347', '#77DD77', '#B39EB5', '#FF6961',
+            '#FDFD96', '#84B6F4', '#FCB9AA', '#BFFCC6', '#FFDAC1'
+        ]; // Predefined color palette
+        let colorIndex = 0;
+
+        function getArtistColorClass(artistName) {
+            if (!artistColors[artistName]) {
+                artistColors[artistName] = colorPalette[colorIndex % colorPalette.length];
+                colorIndex++;
+            }
+            return `artist-color-${colorPalette.indexOf(artistColors[artistName])}`;
+        }
+
+        function renderArtistActivityTimeline(dataToDisplay) {
+            const container = document.getElementById('artistActivityTimeline');
+
+            if (currentArtistTimeline) {
+                currentArtistTimeline.destroy(); // Destroy existing timeline instance
+            }
+            container.innerHTML = ''; // Clear content before re-rendering
+
+            if (dataToDisplay.length === 0) {
+                container.innerHTML = '<div style="text-align:center;padding-top:120px;color:#7f8c9d;">No artist activity data available for the selected artist.</div>';
+                return;
+            }
+
+            const items = new vis.DataSet();
+            const groups = new vis.DataSet();
+            
+            const uniqueArtistsInFilteredData = [...new Set(dataToDisplay.map(item => item.artist))].sort();
+
+            uniqueArtistsInFilteredData.forEach(artist => {
+                groups.add({
+                    id: artist,
+                    content: artist
+                });
+            });
+
+            let minYear = Infinity;
+            let maxYear = -Infinity;
+
+            dataToDisplay.forEach(item => {
+                const startYear = item.release_year;
+                const endYear = startYear + 1; // Representing activity span for a year
+                const popularityClass = getRankColor(item.average_popularity);
+                const artistColorClass = getArtistColorClass(item.artist);
+                // Emotion data is not available at the album level, so emotionClass is not used here.
+
+                items.add({
+                    id: item.id,
+                    group: item.artist,
+                    content: item.album_title,
+                    start: new Date(startYear, 0, 1),
+                    end: new Date(endYear, 0, 1),
+                    title: `Album: ${item.album_title}<br>Artist: ${item.artist}<br>Avg. Popularity: ${item.average_popularity}<br>Songs: ${item.song_count} (${item.songs_list})`,
+                    type: 'box', // Changed to 'box' for album representation
+                    className: `${artistColorClass}` // Apply artist-specific color
+                });
+                
+                if (startYear < minYear) minYear = startYear;
+                if (endYear > maxYear) maxYear = endYear;
+            });
+
+            // Calculate initial start and end for the timeline view
+            // Add a small buffer to the min/max years for better visualization
+            const initialStart = new Date(minYear - 1, 0, 1);
+            const initialEnd = new Date(maxYear + 1, 0, 1);
+
+            const options = {
+                orientation: 'both', // Show axis on both sides
+                zoomMax: 1000 * 60 * 60 * 24 * 365 * 10, // 10 years
+                zoomMin: 1000 * 60 * 60 * 24 * 30, // 1 month
+                verticalScroll: true,
+                zoomable: true,
+                moveable: true,
+                horizontalScroll: true, // Enable explicit horizontal scrollbar
+                showCurrentTime: false,
+                stack: true,
+                tooltip: {
+                    overflowMethod: 'cap'
+                },
+                // Removed start and end here to let fit() handle initial view
+            };
+
+            currentArtistTimeline = new vis.Timeline(container, items, groups, options);
+            currentArtistTimeline.fit(); // Fit the timeline to show all items initially
+        }
+
+        // 2. Artist Activity Timeline (Gantt Style)
+        fetch('/api/operational/artist-activity-timeline')
+            .then(res => res.json())
+            .then(data => {
+                // console.log('Artist activity data fetched:', data);
+                allArtistActivityData = data; // Store the full data
+
+                const container = document.getElementById('artistActivityTimeline');
+                if (data.length === 0) {
+                    container.innerHTML = '<div style="text-align:center;padding-top:120px;color:#7f8c9d;">No artist activity data available. Please ensure your backend API is returning data.</div>';
+                    return;
+                }
+
+                // Populate artist filter
+                const artistFilter = document.getElementById('artistFilter');
+                // Add an 'All Artists' option
+                const allOption = document.createElement('option');
+                allOption.value = 'all';
+                allOption.textContent = 'All Artists';
+                artistFilter.appendChild(allOption);
+
+                const uniqueArtists = [...new Set(data.map(item => item.artist))].sort();
+                uniqueArtists.forEach(artist => {
+                    const option = document.createElement('option');
+                    option.value = artist;
+                    option.textContent = artist;
+                    artistFilter.appendChild(option);
+                });
+
+                // Event listener for artist filter
+                artistFilter.addEventListener('change', () => {
+                    const selectedArtist = artistFilter.value;
+                    let filteredData = [];
+                    if (selectedArtist === 'all') {
+                        filteredData = allArtistActivityData;
+                    }
+                    else {
+                        filteredData = allArtistActivityData.filter(item => item.artist === selectedArtist);
+                    }
+                    renderArtistActivityTimeline(filteredData);
+                });
+
+                // Initial render with all data
+                renderArtistActivityTimeline(allArtistActivityData);
+            })
+            .catch(error => console.error("Error loading artist activity timeline data:", error));
+
+        // 3. Emotion Distribution (Donut Chart)
+        fetch('/api/operational/emotion-distribution')
+            .then(res => res.json())
+            .then(data => {
+                console.log('Emotion Distribution Data:', data); // Temporary debug log
+                const ctx = document.getElementById('emotionDistributionChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: data.emotions,
+                        datasets: [{
+                            data: data.percentages,
+                            backgroundColor: data.colors,
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        if (context.parsed !== null) {
+                                            label += `${context.parsed}%`;
+                                        }
+                                        return label;
+                                    }
+                                }
+                            },
+                            datalabels: {
+                                color: '#fff',
+                                formatter: (value, context) => {
+                                    return `${value}%`;
+                                }
+                            }
+                        }
+                    },
+                    plugins: [ChartDataLabels]
+                });
+            })
+            .catch(error => console.error("Error loading emotion distribution:", error));
+
+        // Define color palettes and cache globally so they are accessible to renderTreemapChart
+        const emotionColorMap = {
+            "anger": "#D72638",  // Deep Red
+            "love": "#F49AC1",     // Warm Pink
+            "money": "#2ECC71",    // Rich Green
+            "violence": "#7B1E3B", // Dark Maroon
+            "community": "#20A39E", // Teal
+            "sadness": "#1E3A8A",  // Deep Blue
+            "hope": "#FFD966",     // Soft Yellow
+            "power": "#5D3FD3",    // Royal Purple
+            "joy": "#FFA500",      // Bright Orange
+            "surprise": "#8E44AD", // Electric Violet
+            "confidence": "#FFB400", // Gold
+            "fear": "#636363",      // Smoky Gray
+            "struggle": "#A23C25",  // Burnt Sienna
+            "aspiration": "#62A8EA", // Sky Blue
+            "neutral": "#CFCFCF"   // Cool Beige
+        };
+
+        const artistPalette = [
+            '#E62429', '#1A73E8', '#34A853', '#FBBC05', '#9C27B0',
+            '#FF5722', '#009688', '#795548', '#607D8B', '#AD1457'
+        ];
+        const albumPalette = [
+            '#FFCDD2', '#BBDEFB', '#C8E6C9', '#FFF9C4', '#E1BEE7',
+            '#FFCCBC', '#B2DFDB', '#D7CCC8', '#CFD8DC', '#F8BBD0'
+        ];
+        const artistColorCache = {};
+
+        function renderTreemapChart(data) {
+            try {
+                if (!data || !data.labels || data.labels.length === 0) {
+                    document.getElementById('artistAlbumEmotionChart').innerHTML = '<div style="text-align:center;padding-top:120px;color:#7f8c9d;">No artist, album, or emotion data available for the Treemap chart.</div>';
+                    return;
+                }
+
+                // Calculate nodeColors inside the render function
+                const nodeColors = data.ids.map((id, index) => {
+                    const label = data.labels[index];
+                    if (id === "all_artists") {
+                        return '#F5F5F5'; // Very light grey for the root
+                    } else if (id.startsWith("artist_")) {
+                        if (!artistColorCache[label]) {
+                            let hash = 0;
+                            for (let i = 0; i < label.length; i++) {
+                                hash = label.charCodeAt(i) + ((hash << 5) - hash);
+                            }
+                            artistColorCache[label] = artistPalette[Math.abs(hash) % artistPalette.length];
+                        }
+                        return artistColorCache[label];
+                    } else if (id.startsWith("album_")) {
+                        let hash = 0;
+                        for (let i = 0; i < label.length; i++) {
+                            hash = label.charCodeAt(i) + ((hash << 5) - hash);
+                        }
+                        // Use the dominant emotion color for albums
+                        const dominantEmotion = data.album_dominant_emotions[id];
+                        return emotionColorMap[dominantEmotion.toLowerCase()] || '#E0E0E0';
+                    } else if (id.startsWith("emotion_")) {
+                        const lowerCaseLabel = label.toLowerCase();
+                        const assignedColor = emotionColorMap[lowerCaseLabel] || '#E0E0E0';
+                        console.log(`Emotion Node Color: ID=${id}, Label=${label}, Color=${assignedColor}`);
+                        return assignedColor;
+                    }
+                    return '#E0E0E0'; // General fallback
+                });
+
+                console.log('Generated nodeColors:', nodeColors); // Debug log for colors
+
+                const chartData = [{
+                    type: "treemap",
+                    labels: data.labels,
+                    parents: data.parents,
+                    values: data.values,
+                    ids: data.ids, // Pass the ids array to Plotly
+                    outsidetextfont: { size: 14, color: "#333" },
+                    marker: { colors: nodeColors }, // Use the newly calculated nodeColors
+                    branchvalues: 'total',
+                    maxdepth: 3, // Artist -> Album -> Emotion
+                    hovertemplate: '<b>%{label}</b><br>Count: %{value}<extra></extra>'
+                }];
+
+                const layout = {
+                    margin: { l: 0, r: 0, b: 0, t: 0 },
+                    uniformtext: { 
+                        minLength: 10, 
+                        mode: 'hide' 
+                    },
+                };
+
+                Plotly.newPlot('artistAlbumEmotionChart', chartData, layout);
+
+                // Populate emotion color legend
+                const emotionColorLegend = document.getElementById('emotionColorLegend');
+                emotionColorLegend.innerHTML = ''; // Clear previous entries
+                for (const emotion in emotionColorMap) {
+                    const colorDiv = document.createElement('div');
+                    colorDiv.style.backgroundColor = emotionColorMap[emotion];
+                    colorDiv.style.display = 'inline-block';
+                    colorDiv.style.width = '15px';
+                    colorDiv.style.height = '15px';
+                    colorDiv.style.border = '1px solid #ccc';
+                    colorDiv.style.verticalAlign = 'middle';
+                    colorDiv.style.marginRight = '5px';
+
+                    const textSpan = document.createElement('span');
+                    textSpan.textContent = emotion.charAt(0).toUpperCase() + emotion.slice(1); // Capitalize emotion name
+
+                    const legendItem = document.createElement('div');
+                    legendItem.style.display = 'inline-block';
+                    legendItem.style.marginRight = '15px';
+                    legendItem.appendChild(colorDiv);
+                    legendItem.appendChild(textSpan);
+                    emotionColorLegend.appendChild(legendItem);
+                }
+            }
+            catch(error) {
+                console.error("Error rendering Treemap chart:", error);
+                document.getElementById('artistAlbumEmotionChart').innerHTML = '<div style="text-align:center;padding-top:120px;color:#dc3545;">Error rendering Treemap chart: ' + error.message + '</div>';
+            }
+        }
+
+        let allTreemapData = null; // Store full dataset
+        let uniqueArtistsForFilter = new Set();
+
+        // 4. Artist -> Album -> Emotion (Treemap Chart)
+        fetch('/api/strategic/artist-album-emotion')
+            .then(res => res.json())
+            .then(data => {
+                console.log('Raw Treemap data fetched:', JSON.stringify(data, null, 2)); // New debug log
+
+                if (!data || !data.labels || data.labels.length === 0) {
+                    document.getElementById('artistAlbumEmotionChart').innerHTML = '<div style="text-align:center;padding-top:120px;color:#7f8c9d;">No artist, album, or emotion data available for the Treemap chart.</div>';
+                    return;
+                }
+
+                allTreemapData = data; // Store the full data
+
+                // Populate artist filter dropdown
+                const treemapArtistFilter = document.getElementById('treemapArtistFilter');
+                // Extract unique artist names from the labels, excluding 'All Artists' and album/emotion labels
+                allTreemapData.labels.forEach((label, index) => {
+                    const id = allTreemapData.ids[index];
+                    if (id.startsWith('artist_') && label !== 'All Artists') {
+                        uniqueArtistsForFilter.add(label);
+                    }
+                });
+
+                // Sort artists alphabetically and add to dropdown
+                Array.from(uniqueArtistsForFilter).sort().forEach(artist => {
+                    const option = document.createElement('option');
+                    option.value = artist;
+                    option.textContent = artist;
+                    treemapArtistFilter.appendChild(option);
+                });
+
+                // Add event listener for the artist filter
+                treemapArtistFilter.addEventListener('change', (event) => {
+                    const selectedArtist = event.target.value;
+                    if (selectedArtist === 'all') {
+                        renderTreemapChart(allTreemapData);
+                    } else {
+                        // Fetch data for the specific artist
+                        fetch(`/api/strategic/artist-album-emotion?artist_name=${encodeURIComponent(selectedArtist)}`)
+                            .then(res => res.json())
+                            .then(artistData => {
+                                console.log(`Filtered Treemap data for ${selectedArtist}:`, artistData);
+                                renderTreemapChart(artistData);
+                            })
+                            .catch(error => {
+                                console.error(`Error fetching filtered artist data for ${selectedArtist}:`, error);
+                                document.getElementById('artistAlbumEmotionChart').innerHTML = '<div style="text-align:center;padding-top:120px;color:#dc3545;">Error loading filtered Treemap chart: ' + error.message + '</div>';
+                            });
+                    }
+                });
+
+                // Initial render of the full Treemap chart
+                renderTreemapChart(allTreemapData);
+            })
+            .catch(error => {
+                console.error("Error loading or rendering artist album emotion data:", error);
+                document.getElementById('artistAlbumEmotionChart').innerHTML = '<div style="text-align:center;padding-top:120px;color:#7f8c9d;">Error loading Treemap chart: ' + error.message + '</div>';
+            });
+
+        // 5. Urgent Alerts Panel
+        fetch('/api/operational/urgent-alerts')
+            .then(res => res.json())
+            .then(data => {
+                const alertsContainer = document.getElementById('alertsContainer');
+                alertsContainer.innerHTML = '';
+
+                if (data.length === 0) {
+                    alertsContainer.innerHTML = '<div style="color:#7f8c8d;">No urgent alerts at this time.</div>';
+                    return;
+                }
+
+                data.forEach(alert => {
+                    const alertDiv = document.createElement('div');
+                    alertDiv.classList.add('alert-item');
+                    if (alert.type === 'warning') {
+                        alertDiv.classList.add('alert-warning');
+                    } else if (alert.type === 'info') {
+                        alertDiv.classList.add('alert-info');
+                    }
+                    alertDiv.innerHTML = alert.message;
+                    alertsContainer.appendChild(alertDiv);
+                });
+            })
+            .catch(error => console.error("Error loading urgent alerts:", error));
+
+    </script>
+</body>
+</html>
