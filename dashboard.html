@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Strategic Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <!-- vis-network for network graph -->
+    <script type="text/javascript" src="https://unpkg.com/vis-network@9.1.2/dist/vis-network.min.js"></script>
+    <link href="https://unpkg.com/vis-network@9.1.2/dist/vis-network.min.css" rel="stylesheet" />
+    <style>
+        body { font-family: Arial, sans-serif; background: #f8f9fa; margin: 0; padding: 0; }
+        .container { max-width: 960px; margin: 1.5rem auto; padding: 1.5rem; background: #fff; border-radius: 10px; box-shadow: 0 2px 10px rgba(34,34,59,0.05);}
+        h1 { text-align: center; margin-bottom: 1.5rem; font-size: 2.2rem; color: #333; }
+        .viz-section { margin-bottom: 2.5rem; border-bottom: 1px solid #eee; padding-bottom: 1.5rem;}
+        .viz-section:last-child { border-bottom: none; }
+        .viz-title { font-size: 1.1rem; margin-bottom: 0.4rem; color: #2c3e50; font-weight: 600; }
+        .viz-question { font-size: 0.9rem; color: #7f8c8d; margin-bottom: 1rem; }
+        .chart-wrapper { width: 100%; max-width: 500px; margin: 0.8rem auto 1.2rem auto; background: #fdfdfd; border-radius: 8px; padding: 1rem; box-shadow: inset 0 1px 3px rgba(0,0,0,0.05); }
+        #network { width: 100%; height: 550px; border: 1px solid #e0e0e0; border-radius: 8px; background: #fdfdfd; }
+        @media (max-width: 700px) {
+            .container { margin: 1rem auto; padding: 1rem; }
+            .chart-wrapper { max-width: 100%; padding: 0.8rem; }
+            h1 { font-size: 1.8rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Strategic Dashboard</h1>
+
+        <div style="text-align: center; margin-bottom: 20px;">
+            <a href="/" style="margin: 0 10px; text-decoration: none; color: #007bff; font-weight: bold;">Home</a>
+            <a href="/dashboard" style="margin: 0 10px; text-decoration: none; color: #007bff; font-weight: bold;">Strategic Dashboard</a>
+            <a href="/operational_dashboard" style="margin: 0 10px; text-decoration: none; color: #6c757d; ">Operational Dashboard</a>
+            <a href="/analytics_dashboard" style="margin: 0 10px; text-decoration: none; color: #6c757d;">Analytical Dashboard</a>
+        </div>
+
+        <!-- Artist Market Share -->
+        <div class="viz-section">
+            <div class="viz-title">Artist Market Share</div>
+            <div class="viz-question">Which artists dominate the catalog and high-performing songs?</div>
+            <div class="chart-wrapper">
+                <canvas id="artistMarketShare"></canvas>
+            </div>
+        </div>
+
+        <!-- Producer Effectiveness -->
+        <div class="viz-section">
+            <div class="viz-title">Producer Effectiveness</div>
+            <div class="viz-question">Which producers create the most popular tracks?</div>
+            <div class="chart-wrapper" style="max-width: 700px;">
+                <canvas id="producerEffectiveness"></canvas>
+            </div>
+        </div>
+
+        <!-- Collaboration Network -->
+        <div class="viz-section">
+            <div class="viz-title">Collaboration Network</div>
+            <div class="viz-question">What are the collaboration patterns and partnership opportunities?</div>
+            <div class="chart-wrapper" style="max-width:100%;padding:0.5rem;">
+                <div id="network"></div>
+            </div>
+        </div>
+
+        <!-- Label Performance -->
+        <div class="viz-section">
+            <div class="viz-title">Label Performance</div>
+            <div class="viz-question">Which labels produce the most high-performing songs?</div>
+            <div class="chart-wrapper" style="max-width: 700px;">
+                <canvas id="labelPerformance"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // Define a consistent color palette
+    const primaryColors = [
+        '#42A5F5', // Blue
+        '#66BB6A', // Green
+        '#FFA726', // Orange
+        '#EF5350', // Red
+        '#AB47BC', // Purple
+        '#7E57C2', // Deep Purple
+        '#26C6DA', // Cyan
+        '#FFCA28'  // Amber
+    ];
+
+    const secondaryColors = primaryColors.map(color => color + 'B3'); // 70% opacity
+
+    // Helper function to shorten labels
+    const getShortenedLabel = (label) => {
+        if (!label) return "Unknown";
+        let displayLabel = label;
+        if (displayLabel.length > 20) {
+            displayLabel = displayLabel.substring(0, 17) + '...';
+        }
+        return displayLabel;
+    };
+
+    // 1. Artist Market Share (Pie Chart with two datasets)
+    fetch('/api/strategic/artist-market-share')
+        .then(res => res.json())
+        .then(data => {
+            const ctx = document.getElementById('artistMarketShare').getContext('2d');
+            if (!data.artists || data.artists.length === 0) {
+                ctx.font = "16px Arial";
+                ctx.fillStyle = "#7f8c8d";
+                ctx.fillText("No data available", 50, 100);
+                return;
+            }
+            
+            // Generate colors dynamically
+            const dynamicColors = data.artists.map((_, i) => primaryColors[i % primaryColors.length]);
+            const dynamicHighPopColors = dynamicColors.map(c => c + 'E6'); // Slightly less transparent
+            
+            new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: data.artists.map(getShortenedLabel),
+                    datasets: [
+                        {
+                            label: 'All Songs',
+                            data: data.song_counts,
+                            backgroundColor: dynamicColors,
+                            borderColor: '#fff',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'High-Popularity Songs',
+                            data: data.high_popularity_counts,
+                            backgroundColor: dynamicHighPopColors,
+                            borderColor: '#fff',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'top' },
+                        title: { 
+                            display: true, 
+                            text: 'Artist Market Share (All vs High-Popularity Songs)', 
+                            font: { size: 14 } 
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.raw || 0;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = Math.round((value / total) * 100);
+                                    return `${label}: ${value} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        })
+        .catch(error => console.error("Error loading artist market share:", error));
+
+    // 2. Producer Effectiveness (Horizontal Bar Chart)
+    fetch('/api/strategic/producer-effectiveness')
+        .then(res => res.json())
+        .then(data => {
+            const ctx = document.getElementById('producerEffectiveness').getContext('2d');
+            
+            if (!data.producers || data.producers.length === 0) {
+                ctx.font = "16px Arial";
+                ctx.fillStyle = "#7f8c8d";
+                ctx.fillText("No data available", 50, 100);
+                return;
+            }
+
+            // Combine data for sorting
+            const combined = data.producers.map((producer, i) => ({
+                producer,
+                avgRank: data.avg_ranks[i],
+                primaryArtist: data.primary_artists[i],
+                songCount: data.song_counts[i],
+                artists: data.artist_lists[i]
+            }));
+
+            // Sort by effectiveness (highest avg rank first)
+            combined.sort((a, b) => b.avgRank - a.avgRank);
+            
+            // Take top 20 most effective producers
+            const topProducers = combined.slice(0, 20);
+            
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: topProducers.map(p => `${getShortenedLabel(p.producer)}`),
+                    datasets: [{
+                        label: 'Average Popularity Score',
+                        data: topProducers.map(p => p.avgRank),
+                        backgroundColor: '#1A73E8', // Set a single, consistent blue color
+                        borderColor: '#fff',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false },
+                        title: { 
+                            display: true, 
+                            text: 'Most Effective Producers (Higher Score = More Popular)', 
+                            font: { size: 14 } 
+                        },
+                        tooltip: {
+                            callbacks: {
+                                afterLabel: function(context) {
+                                    const producer = topProducers[context.dataIndex];
+                                    return [
+                                        `Primary Artist: ${producer.primaryArtist}`,
+                                        `Artists Worked With: ${producer.artists.join(', ')}`,
+                                        `Total Tracks: ${producer.songCount}`
+                                    ].join('\n');
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { 
+                            title: { 
+                                display: true, 
+                                text: 'Average Popularity Score (0-100)', 
+                                font: { size: 12 } 
+                            },
+                            min: 0,
+                            max: 100,
+                            ticks: { font: { size: 10 } } 
+                        },
+                        y: {
+                            title: { display: true, text: 'Producer', font: { size: 12 } },
+                            ticks: { font: { size: 10 } }
+                        }
+                    }
+                }
+            });
+        })
+        .catch(error => console.error("Error loading producer effectiveness:", error));
+
+    // 3. Collaboration Network (Network Graph)
+    fetch('/api/strategic/collaboration-network')
+        .then(res => res.json())
+        .then(data => {
+            const nodes = new vis.DataSet(data.nodes);
+            const edges = new vis.DataSet(data.edges);
+            const container = document.getElementById('network');
+            
+            if (data.nodes.length === 0) {
+                container.innerHTML = '<div style="text-align:center;padding-top:150px;color:#7f8c8d;">No collaboration data available</div>';
+                return;
+            }
+
+            const networkData = { nodes, edges };
+            const options = {
+                nodes: {
+                    shape: 'dot',
+                    scaling: { 
+                        min: 10,
+                        max: 30,
+                        label: { 
+                            enabled: true, 
+                            min: 8, 
+                            max: 16,
+                            drawThreshold: 5
+                        }
+                    },
+                    font: { 
+                        size: 12, 
+                        color: '#333', 
+                        face: 'Arial',
+                        strokeWidth: 2,
+                        strokeColor: '#ffffff'
+                    },
+                    color: {
+                        border: '#2c3e50',
+                        background: primaryColors[0],
+                        highlight: { 
+                            border: '#2c3e50', 
+                            background: primaryColors[3] 
+                        }
+                    }
+                },
+                edges: {
+                    width: 3,
+                    color: { 
+                        color: '#bdc3c7', 
+                        highlight: '#7f8c8d',
+                        opacity: 1.0
+                    },
+                    smooth: { 
+                        type: 'continuous',
+                        roundness: 0.5
+                    },
+                    selectionWidth: 2
+                },
+                physics: { 
+                    stabilization: { 
+                        iterations: 100 
+                    },
+                    barnesHut: {
+                        gravitationalConstant: -2000,
+                        centralGravity: 0.3,
+                        springLength: 150,
+                        avoidOverlap: 0.2
+                    },
+                    minVelocity: 0.75
+                },
+                interaction: { 
+                    hover: true,
+                    tooltipDelay: 200,
+                    hideEdgesOnDrag: true,
+                    multiselect: true
+                }
+            };
+            
+            new vis.Network(container, networkData, options);
+        })
+        .catch(error => console.error("Error loading collaboration network:", error));
+
+    // 4. Label Performance (Stacked Bar Chart)
+    fetch('/api/strategic/label-performance')
+        .then(res => res.json())
+        .then(data => {
+            const ctx = document.getElementById('labelPerformance').getContext('2d');
+            
+            if (!data.labels || data.labels.length === 0) {
+                ctx.font = "16px Arial";
+                ctx.fillStyle = "#7f8c8d";
+                ctx.fillText("No data available", 50, 100);
+                return;
+            }
+
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.labels.map(label => {
+                        const maxLength = 20; // Define a max length for the label
+                        return label.length > maxLength ? label.substring(0, maxLength - 3) + '...' : label;
+                    }),
+                    datasets: data.tier_names.map((tier, i) => ({
+                        label: tier,
+                        data: data.percentages.map(label => label[i]),
+                        backgroundColor: data.tier_colors[i],
+                        borderColor: '#fff',
+                        borderWidth: 1
+                    }))
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { 
+                            position: 'bottom', 
+                            labels: { 
+                                font: { size: 10 },
+                                boxWidth: 12
+                            } 
+                        },
+                        title: { 
+                            display: true, 
+                            text: 'Label Performance by Popularity Tier', 
+                            font: { size: 14 } 
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.dataset.label || '';
+                                    const value = context.raw || 0;
+                                    const totalSongs = data.total_songs_per_label[context.dataIndex] || 0;
+                                    return `${label}: ${value}% (Total Songs: ${totalSongs})`;
+                                }
+                            }
+                        },
+                        datalabels: {
+                            color: '#fff',
+                            formatter: function(value, context) {
+                                return value > 5 ? value + '%' : ''; // Only show label if percentage > 5 to avoid clutter
+                            },
+                            font: {
+                                weight: 'bold',
+                                size: 9
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { 
+                            stacked: true, 
+                            categoryPercentage: 0.9,
+                            barPercentage: 0.9,
+                            title: { 
+                                display: true, 
+                                text: 'Record Label', 
+                                font: { size: 12 } 
+                            }, 
+                            ticks: { 
+                                font: { size: 10 },
+                                maxRotation: 60,
+                                minRotation: 60
+                            } 
+                        },
+                        y: { 
+                            stacked: true, 
+                            beginAtZero: true, 
+                            title: { 
+                                display: true, 
+                                text: 'Percentage of Songs (%)', 
+                                font: { size: 12 } 
+                            }, 
+                            ticks: { 
+                                font: { size: 10 },
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            },
+                            max: 100
+                        }
+                    }
+                }
+            });
+        })
+        .catch(error => console.error("Error loading label performance:", error));
+    </script>
+</body>
+</html>
