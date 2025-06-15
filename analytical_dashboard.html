@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+
+        .dashboard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #333;
+            position: relative;
+        }
+
+        .nav-links {
+            position: absolute;
+            top: 0;
+            right: 0;
+            display: flex;
+            gap: 15px;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: #007bff;
+            font-weight: 500;
+            padding: 5px 10px;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+        }
+
+        .nav-links a:hover {
+            background: #007bff;
+            color: white;
+        }
+
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .chart-container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            min-height: 400px;
+            transition: transform 0.3s ease;
+        }
+
+        .chart-container:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        .chart-title {
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .chart-title i {
+            color: #007bff;
+        }
+
+        .filters {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .filter-group label {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        select, input {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        select:focus, input:focus {
+            border-color: #007bff;
+            outline: none;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        button:hover {
+            background: #0056b3;
+            transform: translateY(-2px);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            font-size: 1.2em;
+            color: #666;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .loading i {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .artist-select {
+            min-width: 200px;
+        }
+
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .stat-card h4 {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #007bff;
+        }
+
+        .error-message {
+            background: #fee;
+            color: #c00;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            display: none;
+        }
+
+        @media (max-width: 1200px) {
+            .chart-grid {
+                grid-template-columns: 1fr;
+            }
+            .stats-container {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .filters {
+                flex-direction: column;
+            }
+            .filter-group {
+                width: 100%;
+            }
+            .stats-container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="header">
+            <div class="nav-links">
+                <a href="/"><i class="fas fa-home"></i> Home</a>
+                <a href="/dashboard"><i class="fas fa-chart-line"></i> Strategic</a>
+                <a href="/operational_dashboard"><i class="fas fa-tasks"></i> Operational</a>
+            </div>
+            <h1>Analytics Dashboard</h1>
+            <p>Track and compare hip-hop artist performance metrics</p>
+        </div>
+
+        <div class="stats-container">
+            <div class="stat-card">
+                <h4>Total Artists</h4>
+                <div class="value" id="totalArtists">-</div>
+            </div>
+            <div class="stat-card">
+                <h4>Average Popularity</h4>
+                <div class="value" id="avgPopularity">-</div>
+            </div>
+            <div class="stat-card">
+                <h4>Total Collaborations</h4>
+                <div class="value" id="totalCollaborations">-</div>
+            </div>
+            <div class="stat-card">
+                <h4>Active Labels</h4>
+                <div class="value" id="activeLabels">-</div>
+            </div>
+        </div>
+
+        <div class="filters">
+            <div class="filter-group">
+                <label for="artistFilter">Select Artists</label>
+                <select id="artistFilter" class="artist-select" multiple>
+                    <option value="">Select Artists</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="yearRangeFilter">Year Range</label>
+                <select id="yearRangeFilter">
+                    <option value="">All Years</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="popularityThreshold">Max Popularity Rank</label>
+                <input type="number" id="popularityThreshold" placeholder="Lower is Better">
+            </div>
+            <button onclick="applyFilters()">
+                <i class="fas fa-filter"></i>
+                Apply Filters
+            </button>
+        </div>
+
+        <div class="error-message" id="errorMessage"></div>
+
+        <div class="chart-grid">
+            <div class="chart-container">
+                <h3 class="chart-title">
+                    <i class="fas fa-chart-bar"></i>
+                    Artist Popularity Comparison
+                </h3>
+                <canvas id="popularityChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3 class="chart-title">
+                    <i class="fas fa-chart-line"></i>
+                    Artist Performance Timeline
+                </h3>
+                <canvas id="timeChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3 class="chart-title">
+                    <i class="fas fa-users"></i>
+                    Collaboration Impact Analysis
+                </h3>
+                <canvas id="collaborationChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script>
+        let charts = {
+            popularity: null,
+            time: null,
+            collaboration: null
+        };
+
+        // Initialize charts
+        function initCharts() {
+            // Popularity Comparison Chart
+            charts.popularity = new Chart(document.getElementById('popularityChart'), {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Average Popularity Rank',
+                        data: [],
+                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y', // Make it a horizontal bar chart
+                    responsive: true,
+                    scales: {
+                        x: { // This is now the popularity rank axis
+                            beginAtZero: true,
+                            reverse: true, // Keep reversed since lower rank is better
+                            title: {
+                                display: true,
+                                text: 'Popularity Rank (Lower is Better)'
+                            }
+                        },
+                        y: { // This is now the artist name axis
+                            ticks: {
+                                font: {
+                                    family: 'Consolas, \'Courier New\', monospace' // Monospace font for labels
+                                },
+                                autoSkip: false // Show all labels
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Time Series Chart
+            charts.time = new Chart(document.getElementById('timeChart'), {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: []
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            reverse: true,
+                            title: {
+                                display: true,
+                                text: 'Average Popularity Rank'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Collaboration Chart
+            charts.collaboration = new Chart(document.getElementById('collaborationChart'), {
+                type: 'scatter',
+                data: {
+                    datasets: []
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            reverse: true,
+                            title: {
+                                display: true,
+                                text: 'Popularity Rank'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Number of Collaborations'
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const item = context.raw;
+                                    return [
+                                        `Main Artist: ${item.main_artist}`,
+                                        `Featured Artist: ${item.featured_artist}`,
+                                        `Collaborations: ${item.x}`,
+                                        `Popularity Rank: ${item.y}`
+                                    ];
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Fetch and update data
+        async function fetchData() {
+            try {
+                const response = await fetch('/api/artists/metrics');
+                const data = await response.json();
+                
+                // Update stats
+                updateStats(data);
+                
+                // Populate artist filter
+                const artistSelect = $('#artistFilter');
+                const artists = data.performance.map(artist => artist._id).sort();
+                artists.forEach(artist => {
+                    const option = new Option(artist, artist, false, false);
+                    artistSelect.append(option);
+                });
+
+                // Initialize Select2
+                artistSelect.select2({
+                    placeholder: "Select Artists",
+                    allowClear: true
+                });
+
+                // Populate year range filter
+                const yearSelect = document.getElementById('yearRangeFilter');
+                const allReleaseYears = data.performance.flatMap(artist => 
+                    [artist.min_release_year, artist.max_release_year].filter(Boolean)
+                );
+                const minYear = Math.min(...allReleaseYears);
+                const maxYear = Math.max(...allReleaseYears);
+
+                // Add 5-year intervals
+                for (let year = minYear; year <= maxYear; year += 5) {
+                    const endYear = Math.min(year + 4, maxYear);
+                    const range = `${year}-${endYear}`;
+                    const option = document.createElement('option');
+                    option.value = range;
+                    option.textContent = range;
+                    yearSelect.appendChild(option);
+                }
+
+                // Add last 25 years option if applicable
+                if (maxYear - minYear >= 25) {
+                    const last25YearsStart = maxYear - 24;
+                    const option = document.createElement('option');
+                    option.value = `${last25YearsStart}-${maxYear}`;
+                    option.textContent = `Last 25 Years (${last25YearsStart}-${maxYear})`;
+                    yearSelect.appendChild(option);
+                }
+
+                console.log('Raw data from API:', data);
+                console.log('label_location_popularity from API:', data.label_location_popularity);
+
+                updateCharts(data);
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                showError('Failed to fetch data. Please try again later.');
+            }
+        }
+
+        // Update charts with new data
+        function updateCharts(data) {
+            const selectedArtists = $('#artistFilter').val();
+            
+            const filteredData = selectedArtists && selectedArtists.length > 0 
+                ? data.performance.filter(artist => selectedArtists.includes(artist._id))
+                : data.performance;
+
+            // Update Popularity Comparison
+            const popularityData = filteredData
+                .sort((a, b) => a.avg_popularity - b.avg_popularity);
+
+            charts.popularity.data.labels = popularityData.map(d => d._id);
+            charts.popularity.data.datasets[0].data = popularityData.map(d => d.avg_popularity);
+            charts.popularity.update();
+
+            // Update Time Series
+            const timeData = {};
+            const colorPalette = [
+                '#8800C7', // Deep Purple
+                '#007BFF', // Vivid Blue
+                '#28A745', // Forest Green
+                '#DC3545', // Crimson Red
+                '#FD7E14', // Bright Orange
+                '#6F42C1', // Medium Purple
+                '#17A2B8', // Teal
+                '#E83E8C'  // Pink
+            ];
+            let colorIndex = 0;
+
+            data.artist_popularity_over_time.forEach(item => {
+                const artistName = item._id.artist;
+                const year = item._id.year;
+                const avgPopularity = item.avg_popularity;
+
+                if (!timeData[artistName]) {
+                    timeData[artistName] = {
+                        label: artistName,
+                        data: [],
+                        borderColor: colorPalette[colorIndex % colorPalette.length],
+                        fill: false,
+                        tension: 0.1 // Adds a slight curve to the lines
+                    };
+                    colorIndex++; // Move to the next color for the next artist
+                }
+                timeData[artistName].data.push({
+                    x: year,
+                    y: avgPopularity
+                });
+            });
+
+            // Sort data points by year for each artist
+            Object.values(timeData).forEach(dataset => {
+                dataset.data.sort((a, b) => a.x - b.x);
+            });
+
+            charts.time.data.labels = []; // Clear the labels array for linear scale
+            charts.time.data.datasets = Object.values(timeData);
+            charts.time.options.scales.x = {
+                type: 'linear',
+                title: {
+                    display: true,
+                    text: 'Release Year'
+                },
+                ticks: {
+                    stepSize: 1, // Ensure years are displayed as integers
+                    callback: function(value, index, values) {
+                        return Math.floor(value);
+                    },
+                    minRotation: 0, // Prevent rotation
+                    maxRotation: 0  // Prevent rotation
+                }
+            };
+            charts.time.update();
+
+            // Update Collaboration Chart
+            const collaborationData = data.collaborations.map(collab => ({
+                x: collab.collaboration_count || 0,
+                y: collab.avg_popularity,
+                main_artist: collab._id.main_artist,
+                featured_artist: collab._id.featured_artist
+            }));
+
+            charts.collaboration.data.datasets = [{
+                label: 'Collaboration Impact',
+                data: collaborationData,
+                backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                borderWidth: 1
+            }];
+
+            charts.collaboration.options.plugins = {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const item = context.raw;
+                            return [
+                                `Main Artist: ${item.main_artist}`,
+                                `Featured Artist: ${item.featured_artist}`,
+                                `Collaborations: ${item.x}`,
+                                `Popularity Rank: ${item.y}`
+                            ];
+                        }
+                    }
+                }
+            };
+            charts.collaboration.update();
+        }
+
+        // Apply filters
+        function applyFilters() {
+            const selectedArtists = $('#artistFilter').val();
+            const yearRange = document.getElementById('yearRangeFilter').value;
+            const popularityThreshold = document.getElementById('popularityThreshold').value;
+
+            const queryParams = new URLSearchParams();
+            if (selectedArtists && selectedArtists.length > 0) {
+                selectedArtists.forEach(artist => queryParams.append('artists', artist));
+            }
+            if (yearRange) queryParams.append('year_range', yearRange);
+            if (popularityThreshold) queryParams.append('popularity_threshold', popularityThreshold);
+
+            fetch(`/api/artists/filter?${queryParams.toString()}`)
+                .then(response => response.json())
+                .then(data => updateCharts(data))
+                .catch(error => console.error('Error applying filters:', error));
+        }
+
+        // Add new function to update stats
+        function updateStats(data) {
+            const totalArtists = data.performance.length;
+            const avgPopularity = data.performance.reduce((sum, artist) => sum + artist.avg_popularity, 0) / totalArtists;
+            const totalCollaborations = data.collaborations.reduce((sum, collab) => sum + collab.collaboration_count, 0);
+            const activeLabels = new Set(data.label_location_popularity.map(item => item._id.label)).size;
+
+            document.getElementById('totalArtists').textContent = totalArtists;
+            document.getElementById('avgPopularity').textContent = avgPopularity.toFixed(1);
+            document.getElementById('totalCollaborations').textContent = totalCollaborations;
+            document.getElementById('activeLabels').textContent = activeLabels;
+        }
+
+        // Add error handling function
+        function showError(message) {
+            const errorElement = document.getElementById('errorMessage');
+            errorElement.textContent = message;
+            errorElement.style.display = 'block';
+            setTimeout(() => {
+                errorElement.style.display = 'none';
+            }, 5000);
+        }
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', () => {
+            initCharts();
+            fetchData();
+        });
+    </script>
+</body>
+</html> 
